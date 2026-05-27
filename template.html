@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Game Dev — PM Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+:root{
+  --bg:#12102b;--s:#1c1a3a;--s2:#252350;--br:#2e2b5a;
+  --ac:#7c6af7;--ac2:#b09dff;--ac3:#f5a3c7;
+  --gr:#5de8b5;--am:#ffd166;--re:#ff6b8a;--cy:#54d4f0;
+  --tx:#f0eeff;--mu:#8b85b8;--card-glow:rgba(124,106,247,.08)
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh}
+body::before{content:'';position:fixed;top:-200px;right:-200px;width:600px;height:600px;background:radial-gradient(circle,rgba(124,106,247,.15) 0%,transparent 70%);pointer-events:none;z-index:0}
+body::after{content:'';position:fixed;bottom:-200px;left:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(245,163,199,.08) 0%,transparent 70%);pointer-events:none;z-index:0}
+/* DROP ZONE */
+#drop-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;position:relative;z-index:1}
+.drop-box{width:480px;border:2px dashed var(--br);border-radius:24px;padding:52px 36px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:var(--s)}
+.drop-box:hover,.drop-box.drag{border-color:var(--ac);background:rgba(124,106,247,.08);box-shadow:0 0 40px rgba(124,106,247,.15)}
+.drop-icon{font-size:52px;margin-bottom:18px}
+.drop-title{font-family:'DM Sans',sans-serif;font-size:22px;font-weight:700;margin-bottom:8px;background:linear-gradient(135deg,var(--ac2),var(--ac3));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.drop-sub{font-size:13px;color:var(--mu);line-height:1.7}
+.drop-btn{margin-top:22px;background:linear-gradient(135deg,var(--ac),#9b87ff);color:#fff;border:none;padding:12px 28px;border-radius:50px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 20px rgba(124,106,247,.4);transition:transform .15s,box-shadow .15s}
+.drop-btn:hover{transform:translateY(-1px);box-shadow:0 6px 28px rgba(124,106,247,.5)}
+.drop-hint{font-size:11px;color:var(--mu)}
+#file-input{display:none}
+/* DASHBOARD */
+#dashboard{display:none;position:relative;z-index:1}
+.header{background:rgba(28,26,58,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--br);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.logo{width:34px;height:34px;background:linear-gradient(135deg,var(--ac),#9b87ff);border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;box-shadow:0 2px 12px rgba(124,106,247,.4)}
+.h-title{font-size:14px;font-weight:700;margin-left:12px;letter-spacing:-.2px}
+.h-sub{font-size:11px;color:var(--mu);margin-left:12px}
+.sprint-badge{background:linear-gradient(135deg,rgba(124,106,247,.25),rgba(176,157,255,.15));border:1px solid rgba(124,106,247,.5);color:var(--ac2);font-size:11px;font-weight:700;padding:5px 12px;border-radius:50px;letter-spacing:.3px}
+.date-txt{font-size:11px;color:var(--mu);margin-left:12px}
+.reload-btn{background:rgba(255,255,255,.05);border:1px solid var(--br);color:var(--mu);padding:5px 14px;border-radius:50px;font-size:12px;cursor:pointer;margin-left:10px;transition:all .2s}
+.reload-btn:hover{border-color:var(--ac);color:var(--ac);background:rgba(124,106,247,.1)}
+.risk-banner{background:rgba(255,107,138,.07);border-bottom:1px solid rgba(255,107,138,.2);padding:8px 28px;font-size:12px;color:var(--re);display:flex;align-items:center;gap:8px}
+.rdot{width:6px;height:6px;background:var(--re);border-radius:50%;animation:pulse 1.5s infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.main{padding:22px 28px;max-width:1400px;margin:0 auto}
+/* KPI */
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}
+.kpi{background:var(--s);border:1px solid var(--br);border-radius:18px;padding:18px 18px 14px;position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s}
+.kpi:hover{transform:translateY(-2px);box-shadow:0 8px 30px var(--card-glow)}
+.kpi::after{content:'';position:absolute;top:0;right:0;width:80px;height:80px;background:radial-gradient(circle,rgba(255,255,255,.04) 0%,transparent 70%);border-radius:50%}
+.kpi-icon{font-size:20px;margin-bottom:10px}
+.kpi-l{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px}
+.kpi-v{font-size:30px;font-weight:700;color:var(--kc,var(--ac2));line-height:1;letter-spacing:-1px}
+.kpi-s{font-size:11px;color:var(--mu);margin-top:6px}
+.kpi-b{height:4px;background:rgba(255,255,255,.06);border-radius:2px;margin-top:10px}
+.kpi-bf{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--kc,var(--ac)),var(--kc,var(--ac2)));transition:width 1.2s cubic-bezier(.4,0,.2,1)}
+/* LAYOUT */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.g3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:14px;margin-bottom:14px}
+/* CARDS */
+.card{background:var(--s);border:1px solid var(--br);border-radius:18px;padding:20px;transition:box-shadow .2s}
+.card:hover{box-shadow:0 4px 24px var(--card-glow)}
+.ct{font-size:11px;font-weight:600;color:var(--mu);text-transform:uppercase;letter-spacing:.07em;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.cdot{width:7px;height:7px;border-radius:50%;background:var(--ac);flex-shrink:0}
+.cw{position:relative;height:180px}
+.cwl{position:relative;height:220px}
+/* SPRINT BARS */
+.sb-row{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.sb-lbl{font-size:10px;color:var(--mu);width:58px;flex-shrink:0}
+.sb-bg{flex:1;height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden;display:flex}
+.sb-done{background:var(--gr)}
+.sb-prog{background:var(--ac)}
+.sb-rev{background:var(--cy)}
+.sb-n{font-size:10px;color:var(--mu);width:24px;text-align:right}
+/* RING */
+.cring{display:flex;align-items:center;gap:18px}
+.rw{position:relative;width:90px;height:90px;flex-shrink:0}
+.rl{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center}
+.rpct{font-size:18px;font-weight:700;color:var(--ac2)}
+.rsub{font-size:10px;color:var(--mu);margin-top:1px}
+.rstats{flex:1}
+.rrow{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.rrow:last-child{border-bottom:none}
+.rlbl{font-size:11px;color:var(--mu);display:flex;align-items:center;gap:5px}
+.rval{font-size:13px;font-weight:700}
+/* RISK */
+.risk-card{background:linear-gradient(135deg,rgba(255,107,138,.06),var(--s));border:1px solid rgba(255,107,138,.2);border-radius:18px;padding:20px}
+.rt{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--re);margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.ri{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;background:rgba(255,107,138,.05);border:1px solid rgba(255,107,138,.1);border-radius:10px;margin-bottom:6px;font-size:12px}
+.ri-t{font-weight:600;margin-bottom:3px;line-height:1.3}
+.ri-m{font-size:11px;color:var(--mu)}
+.warn-card{background:linear-gradient(135deg,rgba(255,209,102,.05),var(--s));border:1px solid rgba(255,209,102,.2);border-radius:18px;padding:20px}
+.wt{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--am);margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.wi{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;background:rgba(255,209,102,.05);border:1px solid rgba(255,209,102,.1);border-radius:10px;margin-bottom:6px;font-size:12px}
+.pill{display:inline-block;font-size:9px;font-weight:700;padding:3px 8px;border-radius:50px;text-transform:uppercase;letter-spacing:.04em;margin-left:auto;flex-shrink:0}
+.p-done{background:rgba(93,232,181,.15);color:var(--gr)}
+.p-prog{background:rgba(124,106,247,.2);color:var(--ac2)}
+.p-rev{background:rgba(84,212,240,.15);color:var(--cy)}
+.p-no{background:rgba(139,133,184,.12);color:var(--mu)}
+.p-ov{background:rgba(255,107,138,.15);color:var(--re)}
+.note-box{font-size:12px;color:var(--mu);line-height:1.8;padding:12px;background:rgba(255,209,102,.04);border:1px solid rgba(255,209,102,.1);border-radius:10px;margin-top:12px}
+.sec-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--mu);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.05)}
+.footer{text-align:center;padding:20px;font-size:10px;color:var(--mu);border-top:1px solid var(--br);letter-spacing:.04em}
+.tag-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.tag-row:last-child{border-bottom:none}
+.tag-pill{font-size:10px;font-weight:600;padding:3px 10px;border-radius:50px;min-width:84px;text-align:center}
+.tag-bar{flex:1;height:5px;background:rgba(255,255,255,.06);border-radius:3px}
+.tag-bar-f{height:100%;border-radius:3px}
+.tag-n{font-size:10px;color:var(--mu);font-weight:600}
+.tog-track{position:relative;width:32px;height:17px;background:var(--br);border-radius:9px;transition:background .2s;flex-shrink:0}
+.tog-track:has(input:checked){background:var(--ac)}
+.tog-track input{position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0}
+.tog-thumb{position:absolute;top:2.5px;left:2.5px;width:12px;height:12px;background:#fff;border-radius:50%;transition:transform .2s;pointer-events:none}
+.tog-track:has(input:checked) .tog-thumb{transform:translateX(15px)}
+.share-banner{background:rgba(124,106,247,.08);border-bottom:1px solid rgba(124,106,247,.2);padding:7px 28px;font-size:11px;color:var(--ac2);display:none;align-items:center;gap:8px}
+</style>
+</head>
+<body>
+
+<!-- DROP SCREEN -->
+<div id="drop-screen">
+  <div class="drop-box" id="drop-box" onclick="document.getElementById('file-input').click()">
+    <div class="drop-icon">📊</div>
+    <div class="drop-title">GAME DEV — PM DASHBOARD</div>
+    <div class="drop-sub">Drop your Notion CSV export here<br>or click to select the file</div>
+    <button class="drop-btn" onclick="event.stopPropagation();document.getElementById('file-input').click()">Choose CSV file</button>
+    <input type="file" id="file-input" accept=".csv">
+  </div>
+  <div class="drop-hint">Weekly report · No data sent anywhere · Runs 100% in your browser</div>
+  <div id="drop-error" style="color:var(--re);font-size:12px;display:none;"></div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard">
+  <div class="header">
+    <div style="display:flex;align-items:center">
+      <div class="logo">PM</div>
+      <div>
+        <span class="h-title">GAME DEV — WEEKLY PRODUCTION REPORT</span>
+        <span class="h-sub" id="h-sub"></span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center">
+      <span class="sprint-badge" id="sprint-badge"></span>
+      <span class="date-txt" id="date-txt"></span>
+      <div id="canva-group" style="display:none;align-items:center;gap:8px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--mu);user-select:none">
+          <div class="tog-track"><input type="checkbox" id="share-toggle" onchange="updateBrief()"><span class="tog-thumb"></span></div>
+          <span id="tog-label">Internal</span>
+        </label>
+        <button class="reload-btn" id="canva-btn" onclick="copyCanvaBrief()" style="border-color:rgba(167,139,250,.5);color:var(--ac2)">◆ Copy Canva Brief</button>
+      </div>
+      <button class="reload-btn" onclick="resetDashboard()">↩ Load new CSV</button>
+    </div>
+  </div>
+  <div class="risk-banner"><div class="rdot"></div><span id="risk-summary"></span></div>
+  <div class="share-banner" id="share-banner">🔒 <strong>Shareable mode ON</strong> — assignee names and task names are anonymized in the Canva brief. Safe to push to Canva.</div>
+  <div class="main">
+    <div class="kpi-row" id="kpi-row"></div>
+    <div class="g3">
+      <div class="card">
+        <div class="ct"><span class="cdot"></span>Current sprint — task status</div>
+        <div class="cring">
+          <div class="rw"><canvas id="donutChart"></canvas><div class="rl"><div class="rpct" id="ring-pct"></div><div class="rsub">done</div></div></div>
+          <div class="rstats" id="ring-stats"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ct"><span class="cdot" style="background:var(--gr)"></span>All sprints progress</div>
+        <div id="sprint-bars"></div>
+        <div style="display:flex;gap:10px;margin-top:10px">
+          <span style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--mu)"><span style="width:7px;height:7px;border-radius:50%;background:var(--gr);display:inline-block"></span>Done</span>
+          <span style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--mu)"><span style="width:7px;height:7px;border-radius:50%;background:var(--ac);display:inline-block"></span>Progress</span>
+          <span style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--mu)"><span style="width:7px;height:7px;border-radius:50%;background:var(--cy);display:inline-block"></span>Review</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ct"><span class="cdot" style="background:var(--ac2)"></span>Team area breakdown</div>
+        <div id="tag-breakdown"></div>
+      </div>
+    </div>
+    <div class="g2">
+      <div class="card"><div class="ct"><span class="cdot" style="background:var(--ac2)"></span>Velocity trend</div><div class="cwl"><canvas id="velChart"></canvas></div></div>
+      <div class="card"><div class="ct"><span class="cdot" style="background:var(--am)"></span>Current sprint delivery health</div><div class="cwl"><canvas id="healthChart"></canvas></div></div>
+    </div>
+    <div class="g2">
+      <div class="risk-card" id="risk-panel"></div>
+      <div class="warn-card" id="warn-panel"></div>
+    </div>
+    <div class="footer" id="footer"></div>
+  </div>
+</div>
+
+<script id="d">const __D__=[{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Main Menu] Loadout & Weapon Shop","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Main Menu] Crates & Loots","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Main Menu] Pets","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Main Menu] Mission","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Main Menu] Bestiary","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Main Menu] Outline Loadout & Weapon Shop","Assignee":"","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Main Menu] Layout Detail Loadout & Weapon Shop","Assignee":"","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Crates&Loots] Outline Crates & Loots","Assignee":"","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Crates&Loots] Layout Detail Crates & Loots","Assignee":"","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Pets] Layout Detail Pets","Assignee":"","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Mission] Layout Detail Mission","Assignee":"","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Bestiary] Outline Bestiary","Assignee":"","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Bestiary] Layout Detail Bestiary","Assignee":"","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Pets] Outline Pets","Assignee":"","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Mission] Outline Mission","Assignee":"","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Shooting Screen] Layout Detail Run-in","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Shooting Screen] Layout Detail Random Weapon Box","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Shooting Screen] Layout Detail Select Upgrade","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Shooting Screen] Layout Detail Death Screen","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"June 3, 2026","Velocity":"0.82","Priority":"","Task name":"WEAPON - VFX/SFX","Assignee":"Thảo Lương Tiến, sonpt4","Tags":"Art"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"June 1, 2026","Velocity":"0.69","Priority":"","Task name":"WEAPON - Animation","Assignee":"Thảo Lương Tiến","Tags":"Art"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"June 5, 2026","Velocity":"1","Priority":"","Task name":"PET","Assignee":"minh truc pham, Du Lý Thiên","Tags":"Art"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"May 22, 2026","Velocity":"0.75","Priority":"🔥🔥🔥🔥🔥","Task name":"MAP - 3D Model & UV/Textures","Assignee":"minh truc pham","Tags":"Art"},{"Sprint":"Sprint 4","Overall status":"In Review","Due date":"May 22, 2026","Velocity":"0.79","Priority":"🔥🔥🔥","Task name":"ZOMBIE","Assignee":"Thảo Lương Tiến","Tags":"Art"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"","Velocity":"","Priority":"","Task name":"LOBBY","Assignee":"minh truc pham","Tags":"Art"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"May 15, 2026","Velocity":"0.57","Priority":"🔥🔥🔥🔥🔥","Task name":"[DEV] Implement GD Config","Assignee":"Công. Nguyễn Thành (9), Datnp","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"May 27, 2026","Velocity":"1","Priority":"","Task name":"LOBBY","Assignee":"Thủy Lê Thanh","Tags":"Art"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"June 5, 2026","Velocity":"1","Priority":"","Task name":"11 WEAPON","Assignee":"Du Lý Thiên, minh truc pham","Tags":"Art"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"June 5, 2026","Velocity":"5.67","Priority":"","Task name":"WEAPON THUMBNAILS","Assignee":"Thủy Lê Thanh","Tags":"Art"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"June 5, 2026","Velocity":"1","Priority":"","Task name":"CRATE + KEY + ITEM LOOT","Assignee":"Thủy Lê Thanh","Tags":"Art"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"May 31, 2026","Velocity":"1","Priority":"🔥🔥🔥🔥🔥","Task name":"[GD] Monetization","Assignee":"sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"May 26, 2026","Velocity":"0.67","Priority":"🔥🔥🔥","Task name":"Game Economy Research","Assignee":"sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"May 29, 2026","Velocity":"1","Priority":"🔥🔥🔥","Task name":"Implement GUSU Economy","Assignee":"sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"May 31, 2026","Velocity":"1","Priority":"🔥🔥🔥","Task name":"Monetization Model","Assignee":"sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"May 29, 2026","Velocity":"0.4","Priority":"","Task name":"SFX","Assignee":"sonpt4, Quỳnh. Nguyễn Ngô Thanh","Tags":"Art, PO/GD"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"June 3, 2026","Velocity":"1","Priority":"🔥🔥🔥🔥🔥","Task name":"[DEV] Implement Weapon Asset Mode/Anim","Assignee":"Công. Nguyễn Thành (9)","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"June 3, 2026","Velocity":"1","Priority":"🔥🔥🔥","Task name":"Implement Enemy Animation","Assignee":"Công. Nguyễn Thành (9)","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"May 29, 2026","Velocity":"2","Priority":"🔥🔥🔥","Task name":"Implement UI wireframe","Assignee":"Bảo. Lê Hồ Ngọc (2), Công. Nguyễn Thành (9)","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"May 27, 2026","Velocity":"1","Priority":"🔥🔥🔥","Task name":"Balance Weapon Tool for GD","Assignee":"Datnp","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"June 5, 2026","Velocity":"2","Priority":"","Task name":"MAP Wrap up","Assignee":"minh truc pham","Tags":"Art"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"June 5, 2026","Velocity":"2","Priority":"","Task name":"Optimize map lighting","Assignee":"minh truc pham","Tags":"Art"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"June 5, 2026","Velocity":"2","Priority":"","Task name":"Player Anims","Assignee":"THAO LUONG","Tags":"Art"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"May 15, 2026","Velocity":"1","Priority":"","Task name":"[GD-UI] WIREFRAME MAIN MENU & SHOOTING SCREEN","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Main Menu] Outline Main Menu","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Shooting Screen] Outline Shooting Screen","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"June 5, 2026","Velocity":"9.33","Priority":"","Task name":"[GD] OUTLINE LOBBY","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"May 18, 2026","Velocity":"1.17","Priority":"","Task name":"[GD-UI] SCREEN LIST & UI ASSETS ESTIMATION","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"May 29, 2026","Velocity":"1","Priority":"","Task name":"Collect feedback map, zoombie, lighting & environment setup after Playtest MVP1","Assignee":"","Tags":"All Lead"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"June 5, 2026","Velocity":"1","Priority":"","Task name":"[V1.1 Update - ART] Epic Dual Shotgun","Assignee":"","Tags":"Art"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"May 26, 2026","Velocity":"0","Priority":"","Task name":"MVP1 - Playtest Kick start (5 internal folks)","Assignee":"sonpt4, Thủy Lê Thanh, Datnp","Tags":"All Lead, Art, PO/GD, Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"June 5, 2026","Velocity":"4.5","Priority":"","Task name":"[GD] Brief Assets (cont): SFX","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"Art, PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"May 26, 2026","Velocity":"1","Priority":"🔥🔥🔥🔥🔥","Task name":"Playtest / Check Game Fields","Assignee":"","Tags":"All Lead"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"May 27, 2026","Velocity":"1.14","Priority":"","Task name":"Implement Door between zone","Assignee":"Công. Nguyễn Thành (9)","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"June 3, 2026","Velocity":"1","Priority":"","Task name":"QoL Features Spec","Assignee":"sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"June 5, 2026","Velocity":"1","Priority":"","Task name":"Codex Spec","Assignee":"sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"June 7, 2026","Velocity":"1","Priority":"","Task name":"FTUE Spec","Assignee":"sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"June 2, 2026","Velocity":"","Priority":"","Task name":"Like and Join Group","Assignee":"","Tags":""},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"June 3, 2026","Velocity":"","Priority":"","Task name":"Settings","Assignee":"","Tags":""},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"June 2, 2026","Velocity":"","Priority":"","Task name":"Roblox Badges","Assignee":"","Tags":""},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"June 2, 2026","Velocity":"","Priority":"","Task name":"Daily Reward","Assignee":"","Tags":""},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"June 3, 2026","Velocity":"","Priority":"","Task name":"Redeem Giftcode","Assignee":"","Tags":""},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"June 2, 2026","Velocity":"","Priority":"","Task name":"Invite Friends","Assignee":"","Tags":""},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"June 3, 2026","Velocity":"","Priority":"","Task name":"Leaderboard","Assignee":"","Tags":""},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Assets] Ui Assets Estimation","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Assets] Ui Assets Mapping","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"Done","Due date":"","Velocity":"","Priority":"","Task name":"[UI-Screen] Screen List & Detail","Assignee":"Quỳnh. Nguyễn Ngô Thanh, sonpt4","Tags":"PO/GD"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"May 29, 2026","Velocity":"0.36","Priority":"","Task name":"IN-GAME UI","Assignee":"Thủy Lê Thanh","Tags":"Art"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"May 29, 2026","Velocity":"","Priority":"","Task name":"Wave fomulas","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Hp Scale","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Upgrade Drop Rate","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Gacha Drop rate","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Key Drop rate","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"May 29, 2026","Velocity":"","Priority":"","Task name":"Upgrade Weapon","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"May 29, 2026","Velocity":"","Priority":"","Task name":"Open Crate Rate/Time","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Gold Drop rate","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"May 22, 2026","Velocity":"0","Priority":"🔥🔥🔥","Task name":"ZOOMBIE VFX","Assignee":"","Tags":"Art"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"","Velocity":"","Priority":"","Task name":"Main Menu Screen (General contain all wireframe)","Assignee":"Bảo. Lê Hồ Ngọc (2)","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"In Review","Due date":"","Velocity":"","Priority":"","Task name":"Loadout Screen","Assignee":"Bảo. Lê Hồ Ngọc (2)","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"In Review","Due date":"","Velocity":"0","Priority":"","Task name":"Weapon Shop","Assignee":"Bảo. Lê Hồ Ngọc (2)","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"","Velocity":"","Priority":"","Task name":"Pet Screen","Assignee":"Bảo. Lê Hồ Ngọc (2)","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"In Review","Due date":"","Velocity":"","Priority":"","Task name":"Loot Crate Screen","Assignee":"Bảo. Lê Hồ Ngọc (2)","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"","Velocity":"","Priority":"","Task name":"UZI","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"","Velocity":"","Priority":"","Task name":"Gatling","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Foundry","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Lift","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Pyro Blaster","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Piercing Flame","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Brick","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Sting Crossbow","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Dual Blaster","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Tiger Cannon","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Vector","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Astrotech Rifle","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Sizzling Rounds","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Pixel Sword","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Stella Scar","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Glove","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Dual Shotgun","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Argus","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Unicorn Hammer","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Dragon Chaser","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Foundry","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"UZI","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Gatling","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Foundry","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Godslayer","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"Not started","Due date":"","Velocity":"","Priority":"","Task name":"Dragon Breath","Assignee":"","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"May 29, 2026","Velocity":"0","Priority":"🔥","Task name":"Plugin Quick Test for 3D","Assignee":"Công. Nguyễn Thành (9)","Tags":"Technical/Dev"},{"Sprint":"Sprint 4","Overall status":"In progress","Due date":"May 29, 2026","Velocity":"0","Priority":"🔥🔥🔥","Task name":"Implement Weapon Animation","Assignee":"Công. Nguyễn Thành (9)","Tags":"Technical/Dev"}];</script>
+<script>
+const TODAY = new Date();
+let charts = {};
+
+// --- FILE INPUT ---
+const fileInput = document.getElementById('file-input');
+const dropBox = document.getElementById('drop-box');
+fileInput.addEventListener('change', e => e.target.files[0] && processFile(e.target.files[0]));
+dropBox.addEventListener('dragover', e => { e.preventDefault(); dropBox.classList.add('drag'); });
+dropBox.addEventListener('dragleave', () => dropBox.classList.remove('drag'));
+dropBox.addEventListener('drop', e => { e.preventDefault(); dropBox.classList.remove('drag'); e.dataTransfer.files[0] && processFile(e.dataTransfer.files[0]); });
+
+function resetDashboard() {
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('drop-screen').style.display = 'flex';
+  fileInput.value = '';
+}
+
+function processFile(file) {
+  Papa.parse(file, {
+    header: true, skipEmptyLines: true,
+    complete: r => { try { buildDashboard(r.data); } catch(e) { showError('Parse error: ' + e.message); } },
+    error: e => showError(e.message)
+  });
+}
+
+function showError(msg) {
+  const el = document.getElementById('drop-error');
+  el.textContent = msg; el.style.display = 'block';
+}
+
+// --- PARSE HELPERS ---
+function getSprint(val) {
+  if (!val) return 'Unknown';
+  const m = String(val).match(/Sprint\s*(\d+)/i);
+  return m ? `Sprint ${m[1]}` : 'Unknown';
+}
+function parseDate(val) {
+  if (!val) return null;
+  const d = new Date(val);
+  return isNaN(d) ? null : d;
+}
+function statusNorm(val) {
+  const v = String(val||'').toLowerCase().trim();
+  if (v.includes('not start') || v === '') return 'Not started';
+  if (v.includes('in review') || v.includes('review')) return 'In Review';
+  if (v.includes('in progress') || v.includes('progress')) return 'In progress';
+  if (v.includes('done') || v.includes('complet')) return 'Done';
+  return val || 'Not started';
+}
+function fireCount(val) { return String(val||'').split('🔥').length - 1; }
+
+// --- MAIN BUILD ---
+function buildDashboard(rows) {
+  // Normalize
+  rows.forEach(r => {
+    r._sprint = getSprint(r['Sprint']);
+    r._status = statusNorm(r['Overall status']);
+    r._due = parseDate(r['Due date']);
+    r._vel = parseFloat(r['Velocity']) || 0;
+    r._fire = fireCount(r['Priority']);
+    r._isDone = r._status === 'Done';
+  });
+
+  // Find current sprint = highest sprint number with active tasks
+  const sprintNums = rows.map(r => parseInt((r._sprint.match(/\d+/)||[0])[0])||0);
+  const activeSprints = [...new Set(rows.filter(r=>!r._isDone && r._sprint!=='Unknown').map(r=>r._sprint))];
+  const currentSprint = activeSprints.sort((a,b)=>{
+    const na=parseInt(a.match(/\d+/)||0), nb=parseInt(b.match(/\d+/)||0); return na-nb;
+  })[0] || allSprints.filter(s=>s!=='Unknown').slice(-1)[0] || 'Sprint 4';
+
+  const curr = rows.filter(r => r._sprint === currentSprint);
+  const allSprints = [...new Set(rows.map(r=>r._sprint))].filter(s=>s!=='Unknown').sort((a,b)=>{
+    return parseInt(a.match(/\d+/)||0)-parseInt(b.match(/\d+/)||0);
+  });
+
+  // KPIs
+  const currTotal = curr.length;
+  const currDone = curr.filter(r=>r._isDone).length;
+  const currProg = curr.filter(r=>r._status==='In progress').length;
+  const currRev = curr.filter(r=>r._status==='In Review').length;
+  const currNot = curr.filter(r=>r._status==='Not started').length;
+  const currPct = currTotal ? (currDone/currTotal*100).toFixed(1) : 0;
+  const allDone = rows.filter(r=>r._isDone).length;
+  const allProg = rows.filter(r=>r._status==='In progress').length;
+  const allNot = rows.filter(r=>r._status==='Not started').length;
+  const velRows = rows.filter(r=>r._vel>0);
+  const avgVel = velRows.length ? (velRows.reduce((s,r)=>s+r._vel,0)/velRows.length).toFixed(2) : '—';
+
+  // Risk
+  const overdue = rows.filter(r=>r._due && r._due < TODAY && !r._isDone);
+  const highStuck = rows.filter(r=>r._fire>=5 && !r._isDone);
+  const soonNotStart = rows.filter(r=>r._status==='Not started' && r._due && r._due >= TODAY && r._due <= new Date(TODAY.getTime()+7*86400000));
+  const riskCount = overdue.length + (highStuck.length ? 1 : 0) + soonNotStart.length;
+
+  // Header
+  document.getElementById('h-sub').textContent = ` · Roblox Project · ${rows.length} tasks total`;
+  document.getElementById('sprint-badge').textContent = `◆ ${currentSprint.toUpperCase()} ACTIVE`;
+  document.getElementById('date-txt').textContent = `Week of ${TODAY.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`;
+  document.getElementById('risk-summary').innerHTML = `<strong>${riskCount} RISK FLAG${riskCount!==1?'S':''} THIS WEEK:</strong> &nbsp;${overdue.length} overdue · ${highStuck.length} high-priority stuck · ${soonNotStart.length} not-started due soon`;
+
+  // KPI row
+  document.getElementById('kpi-row').innerHTML = `
+    <div class="kpi" style="--kc:var(--ac)"><div class="kpi-l">${currentSprint} completion</div><div class="kpi-v">${currPct}%</div><div class="kpi-s">${currDone} of ${currTotal} tasks done</div><div class="kpi-b"><div class="kpi-bf" style="width:${currPct}%"></div></div></div>
+    <div class="kpi" style="--kc:var(--gr)"><div class="kpi-l">Total tasks done</div><div class="kpi-v">${allDone}</div><div class="kpi-s">Across all sprints</div><div class="kpi-b"><div class="kpi-bf" style="width:${Math.min(100,allDone/rows.length*100)}%"></div></div></div>
+    <div class="kpi" style="--kc:var(--am)"><div class="kpi-l">In progress</div><div class="kpi-v">${allProg}</div><div class="kpi-s">All sprints</div><div class="kpi-b"><div class="kpi-bf" style="width:${Math.min(100,allProg/rows.length*100)}%"></div></div></div>
+    <div class="kpi" style="--kc:var(--re)"><div class="kpi-l">Not started</div><div class="kpi-v">${allNot}</div><div class="kpi-s">${currNot} in ${currentSprint}</div><div class="kpi-b"><div class="kpi-bf" style="width:${Math.min(100,allNot/rows.length*100)}%"></div></div></div>
+    <div class="kpi" style="--kc:var(--cy)"><div class="kpi-l">Avg velocity</div><div class="kpi-v">${avgVel}</div><div class="kpi-s">Tasks/manday completed</div><div class="kpi-b"><div class="kpi-bf" style="width:${Math.min(100,parseFloat(avgVel)/3*100)}%"></div></div></div>
+  `;
+
+  // Ring stats
+  document.getElementById('ring-pct').textContent = currPct + '%';
+  document.getElementById('ring-stats').innerHTML = [
+    ['var(--gr)','Done',currDone,'p-done'],
+    ['var(--ac)','In progress',currProg,'p-prog'],
+    ['var(--cy)','In Review',currRev,'p-rev'],
+    ['#3a3f50','Not started',currNot,'p-no']
+  ].map(([c,l,v,p])=>`<div class="rrow"><span class="rlbl"><span style="width:7px;height:7px;border-radius:50%;background:${c};display:inline-block"></span>${l}</span><span class="rval" style="color:${c}">${v}</span></div>`).join('');
+
+  // Sprint bars
+  const sprintData = {};
+  allSprints.forEach(s => {
+    const sr = rows.filter(r=>r._sprint===s);
+    const tot = sr.length;
+    sprintData[s] = { done: sr.filter(r=>r._isDone).length, prog: sr.filter(r=>r._status==='In progress').length, rev: sr.filter(r=>r._status==='In Review').length, tot };
+  });
+  document.getElementById('sprint-bars').innerHTML = allSprints.map(s => {
+    const d = sprintData[s];
+    const donePct = d.tot ? d.done/d.tot*100 : 0;
+    const progPct = d.tot ? d.prog/d.tot*100 : 0;
+    const revPct = d.tot ? d.rev/d.tot*100 : 0;
+    const color = d.done===d.tot ? 'var(--gr)' : (s===currentSprint ? 'var(--ac)' : 'var(--mu)');
+    return `<div class="sb-row"><span class="sb-lbl">${s}</span><div class="sb-bg"><div class="sb-done" style="width:${donePct}%"></div><div class="sb-rev" style="width:${revPct}%"></div><div class="sb-prog" style="width:${progPct}%"></div></div><span class="sb-n" style="color:${color}">${d.tot}</span></div>`;
+  }).join('');
+
+  // Tags breakdown for current sprint
+  const tagCounts = {};
+  curr.forEach(r => { const t = r['Tags']||'Untagged'; t.split(',').forEach(tag=>{ tag=tag.trim(); tagCounts[tag]=(tagCounts[tag]||0)+1; }); });
+  const tagMax = Math.max(...Object.values(tagCounts), 1);
+  const tagColors = {'Technical/Dev':['#1e3a5f','#60a5fa'],'PO/GD':['#2d1f4a','#a78bfa'],'Art':['#1a3a2a','#4ade80']};
+  document.getElementById('tag-breakdown').innerHTML = Object.entries(tagCounts).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([tag,cnt])=>{
+    const [bg,tc] = tagColors[tag]||['#252a3a','var(--mu)'];
+    return `<div class="tag-row"><span class="tag-pill" style="background:${bg};color:${tc}">${tag}</span><div class="tag-bar"><div class="tag-bar-f" style="width:${cnt/tagMax*100}%;background:${tc};opacity:.6"></div></div><span class="tag-n">${cnt}</span></div>`;
+  }).join('');
+
+  // Velocity chart
+  const velBySprint = allSprints.map(s => {
+    const sr = rows.filter(r=>r._sprint===s && r._vel>0);
+    return { sprint: s, avg: sr.length ? +(sr.reduce((a,r)=>a+r._vel,0)/sr.length).toFixed(2) : 0, done: rows.filter(r=>r._sprint===s&&r._isDone).length };
+  });
+  if (charts.vel) charts.vel.destroy();
+  charts.vel = new Chart(document.getElementById('velChart'), {
+    data: { labels: velBySprint.map(d=>d.sprint), datasets: [
+      { type:'bar', label:'Tasks done', data: velBySprint.map(d=>d.done), backgroundColor:'rgba(124,106,247,.75)', borderRadius:4, yAxisID:'y' },
+      { type:'line', label:'Avg velocity', data: velBySprint.map(d=>d.avg), borderColor:'#f5a3c7', backgroundColor:'rgba(245,163,199,.1)', borderWidth:2, pointBackgroundColor:'#f5a3c7', pointRadius:3, tension:.3, fill:true, yAxisID:'y2' }
+    ]},
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{ font:{size:10}, padding:10 }}},
+      scales:{ y:{position:'left',grid:{color:'#2e2b5a'},ticks:{font:{size:10}}}, y2:{position:'right',grid:{drawOnChartArea:false},ticks:{font:{size:10}}}, x:{grid:{color:'#2e2b5a'},ticks:{font:{size:10}}} }
+    }
+  });
+
+  // Health chart
+  if (charts.health) charts.health.destroy();
+  charts.health = new Chart(document.getElementById('healthChart'), {
+    type:'bar',
+    data:{ labels:['Done','In Progress','In Review','Not Started'], datasets:[{
+      data:[currDone,currProg,currRev,currNot],
+      backgroundColor:['#5de8b5','#7c6af7','#54d4f0','#2e2b5a'], borderRadius:4, borderSkipped:false
+    }]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx=>`${ctx.raw} tasks (${currTotal?Math.round(ctx.raw/currTotal*100):0}%)` }}},
+      scales:{ x:{grid:{color:'#2e2b5a'},ticks:{font:{size:10}}}, y:{grid:{display:false},ticks:{font:{size:11}}} }
+    }
+  });
+
+  // Donut
+  if (charts.donut) charts.donut.destroy();
+  charts.donut = new Chart(document.getElementById('donutChart'), {
+    type:'doughnut',
+    data:{ labels:['Done','In Progress','In Review','Not Started'], datasets:[{
+      data:[currDone,currProg,currRev,currNot],
+      backgroundColor:['#5de8b5','#7c6af7','#54d4f0','#2e2b5a'], borderColor:'#1c1a3a', borderWidth:2
+    }]},
+    options:{ cutout:'72%', plugins:{ legend:{display:false}}, animation:{duration:800} }
+  });
+
+  // Risk panel
+  const riskHtml = `
+    <div class="rt">⚠ Critical risks</div>
+    <div class="sec-lbl">Overdue (${overdue.length})</div>
+    ${overdue.length ? overdue.map(r=>`<div class="ri"><div><div class="ri-t">${r['Task name']||'—'}</div><div class="ri-m">Due ${r['Due date']} · ${r._status} · ${r['Assignee']||'Unassigned'} · ${r._sprint}</div></div><span class="pill p-ov">OVERDUE</span></div>`).join('') : '<div style="font-size:12px;color:var(--mu);padding:8px">✅ No overdue tasks</div>'}
+    <div class="sec-lbl" style="margin-top:12px">High priority 🔥🔥🔥🔥🔥 not done (${highStuck.length})</div>
+    ${highStuck.slice(0,6).map(r=>`<div class="ri"><div><div class="ri-t">${r['Task name']||'—'}</div><div class="ri-m">Due ${r['Due date']||'—'} · ${r._status} · ${r['Assignee']||'Unassigned'} · ${r._sprint}</div></div><span class="pill ${r._status==='In Review'?'p-rev':r._status==='In progress'?'p-prog':'p-no'}">${r._status}</span></div>`).join('')}
+  `;
+  document.getElementById('risk-panel').innerHTML = riskHtml;
+
+  // Warn panel
+  const notes = [];
+  const byAssignee = {};
+  highStuck.forEach(r=>{ (r['Assignee']||'Unassigned').split(',').forEach(a=>{ a=a.trim(); byAssignee[a]=(byAssignee[a]||0)+1; }); });
+  Object.entries(byAssignee).sort((a,b)=>b[1]-a[1]).slice(0,2).forEach(([a,n])=>{ if(n>1) notes.push(`🟠 <span style="color:var(--tx)">${a}</span> has ${n} high-priority tasks stuck — potential bottleneck`); });
+  const unassigned = soonNotStart.filter(r=>!r['Assignee']);
+  if(unassigned.length) notes.push(`🟠 ${unassigned.length} task(s) due soon with <span style="color:var(--tx)">no assignee</span> — assign immediately`);
+  if(parseFloat(currPct)<30) notes.push(`🟠 <span style="color:var(--tx)">${currentSprint} at ${currPct}%</span> completion — check team velocity mid-sprint`);
+  const prevSprint = allSprints[allSprints.indexOf(currentSprint)-1];
+  if(prevSprint) { const prevProg = rows.filter(r=>r._sprint===prevSprint&&!r._isDone).length; if(prevProg>0) notes.push(`🟠 <span style="color:var(--tx)">${prevSprint}</span> has ${prevProg} unclosed tasks — carry-over risk`); }
+
+  document.getElementById('warn-panel').innerHTML = `
+    <div class="wt">⚡ Warnings — not started, due within 7 days</div>
+    ${soonNotStart.length ? soonNotStart.map(r=>`<div class="wi"><div style="font-size:14px">⚡</div><div><div class="ri-t">${r['Task name']||'—'}</div><div class="ri-m">Due ${r['Due date']} · ${r['Assignee']||'Unassigned'} · ${r._sprint}</div></div></div>`).join('') : '<div style="font-size:12px;color:var(--mu);padding:8px">✅ No urgent not-started tasks</div>'}
+    ${notes.length ? `<div class="sec-lbl" style="margin-top:12px">PM attention notes</div><div class="note-box">${notes.map(n=>`<div style="margin-bottom:5px">${n}</div>`).join('')}</div>` : ''}
+  `;
+
+  document.getElementById('footer').textContent = `AUTO-GENERATED FROM NOTION CSV · ${currentSprint.toUpperCase()} ACTIVE · ${new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})} · ${rows.length} TASKS TOTAL`;
+
+  document.getElementById('drop-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('canva-group').style.display = 'flex';
+
+  // Build role map: normalize assignee names to roles for safe sharing
+  const roleMap = {};
+  const roleCounts = {};
+  const tagRoleMap = {'Technical/Dev':'Dev','PO/GD':'PO/GD','Art':'Art'};
+  rows.forEach(r => {
+    const assignees = (r['Assignee']||'').split(',').map(a=>a.trim()).filter(Boolean);
+    const tag = (r['Tags']||'').split(',')[0].trim();
+    const roleBase = tagRoleMap[tag] || 'Member';
+    assignees.forEach(a => {
+      if (!roleMap[a]) {
+        roleCounts[roleBase] = (roleCounts[roleBase]||0) + 1;
+        roleMap[a] = roleBase + ' ' + roleCounts[roleBase];
+      }
+    });
+  });
+
+  const prevSp = allSprints[allSprints.indexOf(currentSprint)-1];
+  const prevDone2 = prevSp && sprintData[prevSp] ? sprintData[prevSp].done : 0;
+
+  // Store raw data for internal brief
+  window._rawData = { currentSprint, rows, currTotal, currDone, currPct, currProg, currNot, avgVel,
+    overdue, highStuck, soonNotStart, prevDone2, tagCounts, allSprints, sprintData, roleMap };
+
+  updateBrief();
+}
+
+function buildBrief(shareable) {
+  const d = window._rawData;
+  if (!d) return '';
+  const safe = (name) => shareable ? (d.roleMap[name] || 'Team Member') : name;
+  const safeTask = (task) => {
+    if (!shareable) return (task||'').slice(0,40);
+    // keep category prefix like [GD], [DEV], [ART] but strip actual name
+    const m = (task||'').match(/^\[([^\]]+)\]/);
+    return m ? '['+m[1]+'] task' : 'Task';
+  };
+  const riskItems = d.overdue.concat(d.highStuck).slice(0,3)
+    .map(r => safeTask(r['Task name']) + (shareable ? '' : ' ('+r['Assignee']+')'))
+    .join(' / ');
+  const warnItems = d.soonNotStart.slice(0,2)
+    .map(r => safeTask(r['Task name']))
+    .join(' / ');
+  // Bottleneck: show role not name when shareable
+  const bottleneck = (() => {
+    const bc = {};
+    d.highStuck.forEach(r => (r['Assignee']||'').split(',').forEach(a => { a=a.trim(); if(a) bc[a]=(bc[a]||0)+1; }));
+    const top = Object.entries(bc).sort((a,b)=>b[1]-a[1])[0];
+    return top ? safe(top[0])+':'+top[1] : '';
+  })();
+  return [
+    'CANVA_BRIEF',
+    'sprint:'+d.currentSprint,
+    'date:'+TODAY.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),
+    'total:'+d.rows.length,
+    'curr_total:'+d.currTotal,
+    'done:'+d.currDone,
+    'pct:'+d.currPct,
+    'inprog:'+d.currProg,
+    'notstart:'+d.currNot,
+    'vel:'+d.avgVel,
+    'overdue:'+d.overdue.length,
+    'highstuck:'+d.highStuck.length,
+    'soon:'+d.soonNotStart.length,
+    'risks:'+riskItems,
+    'warns:'+warnItems,
+    'bottleneck:'+bottleneck,
+    'prev_done:'+d.prevDone2,
+    'tags:'+Object.entries(d.tagCounts).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([t,n])=>t+':'+n).join(','),
+    'shareable:'+(shareable?'yes':'no')
+  ].join('|');
+}
+
+function updateBrief() {
+  const shareable = document.getElementById('share-toggle').checked;
+  document.getElementById('tog-label').textContent = shareable ? 'Shareable' : 'Internal';
+  const banner = document.getElementById('share-banner');
+  banner.style.display = shareable ? 'flex' : 'none';
+  window._brief = buildBrief(shareable);
+}
+
+function copyCanvaBrief() {
+  if (!window._brief) return;
+  navigator.clipboard.writeText(window._brief).then(()=>{
+    const btn = document.getElementById('canva-btn');
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    btn.style.color = 'var(--gr)';
+    setTimeout(()=>{ btn.textContent = orig; btn.style.color = 'var(--ac2)'; }, 2000);
+  });
+}
+if(typeof __D__!=="undefined"&&__D__.length)buildDashboard(__D__);
+</script>
+</body>
+</html>
