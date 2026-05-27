@@ -15,7 +15,7 @@ HEADERS  = {
 }
 COLS = ['Sprint','Overall status','Due date','Velocity','Priority','Task name','Assignee','Tags']
 
-# ── NOTION API ───────────────────────────────────────────────────────────────
+# ── NOTION API ────────────────────────────────────────────
 
 _title_cache = {}
 
@@ -26,8 +26,7 @@ def get_page_title(page_id):
     try:
         r = requests.get(
             f'https://api.notion.com/v1/pages/{page_id}',
-            headers=HEADERS, timeout=10
-        )
+            headers=HEADERS, timeout=10)
         for prop in r.json().get('properties', {}).values():
             if prop.get('type') == 'title':
                 texts = prop.get('title', [])
@@ -41,53 +40,73 @@ def get_page_title(page_id):
     return ''
 
 def extract(prop):
-    """Extract plain value from any Notion property type."""
+    """Extract a plain-text value from a Notion property object."""
     if not prop:
         return ''
     t = prop.get('type', '')
     if t == 'title':
-        return ''.join(p.get('plain_text','') for p in prop.get('title', []))
+        items = prop.get('title', [])
+        return items[0].get('plain_text', '') if items else ''
     if t == 'rich_text':
-        return ''.join(p.get('plain_text','') for p in prop.get('rich_text', []))
+        items = prop.get('rich_text', [])
+        return items[0].get('plain_text', '') if items else ''
     if t == 'select':
         s = prop.get('select')
-        return s['name'] if s else ''
+        return s.get('name', '') if s else ''
     if t == 'multi_select':
-        return ', '.join(s['name'] for s in prop.get('multi_select', []))
+        return ', '.join(o.get('name', '') for o in prop.get('multi_select', []))
     if t == 'date':
         d = prop.get('date')
-        return d['start'] if d else ''
+        return d.get('start', '') if d else ''
     if t == 'number':
-        n = prop.get('number')
-        return str(n) if n is not None else ''
+        v = prop.get('number')
+        return str(v) if v is not None else ''
     if t == 'people':
-        return ', '.join(p.get('name','') for p in prop.get('people', []))
+        people = prop.get('people', [])
+        names = [p.get('name', '') for p in people if p.get('name')]
+        return ', '.join(names)
     if t == 'formula':
         f = prop.get('formula', {})
         ft = f.get('type', '')
-        if ft == 'number':
-            n = f.get('number')
-            return str(n) if n is not None else ''
-        if ft == 'string':
-            return f.get('string') or ''
+        if ft == 'string': return f.get('string', '') or ''
+        if ft == 'number': v = f.get('number'); return str(v) if v is not None else ''
+        if ft == 'boolean': return str(f.get('boolean', ''))
+        return ''
     if t == 'relation':
         rels = prop.get('relation', [])
         return get_page_title(rels[0]['id']) if rels else ''
     if t == 'rollup':
-        rollup = prop.get('rollup', {})
-        if rollup.get('type') == 'number':
-            n = rollup.get('number')
-            return str(n) if n is not None else ''
+        ro = prop.get('rollup', {})
+        rt = ro.get('type', '')
+        if rt == 'number':
+            v = ro.get('number')
+            return str(v) if v is not None else ''
+        if rt == 'array':
+            arr = ro.get('array', [])
+            parts = [extract(item) for item in arr if extract(item)]
+            return ', '.join(parts)
+        return ''
+    if t == 'checkbox':
+        return 'Yes' if prop.get('checkbox') else 'No'
+    if t == 'url':
+        return prop.get('url', '') or ''
+    if t == 'email':
+        return prop.get('email', '') or ''
+    if t == 'phone_number':
+        return prop.get('phone_number', '') or ''
+    if t == 'status':
+        s = prop.get('status')
+        return s.get('name', '') if s else ''
     return ''
 
+# ── PAGINATION ────────────────────────────────────────────
+
 def query_all():
-    """Fetch all pages from database (handles pagination)."""
     results, payload = [], {'page_size': 100}
     while True:
         r = requests.post(
             f'https://api.notion.com/v1/databases/{DB_ID}/query',
-            headers=HEADERS, json=payload, timeout=30
-        )
+            headers=HEADERS, json=payload, timeout=30)
         if r.status_code != 200:
             print(f'ERROR {r.status_code}: {r.text[:300]}')
             sys.exit(1)
@@ -98,6 +117,8 @@ def query_all():
             break
         payload['start_cursor'] = data['next_cursor']
     return results
+
+# ── ROW MAPPING ───────────────────────────────────────────
 
 def page_to_row(page):
     props = page.get('properties', {})
@@ -127,7 +148,7 @@ def page_to_row(page):
         'Tags':            p('Tags'),
     }
 
-# ── BUILD ────────────────────────────────────────────────────────────────────
+# ── BUILD ─────────────────────────────────────────────────
 
 def build():
     if not TOKEN:
@@ -149,16 +170,18 @@ def build():
         template = f.read()
 
     new_tag = f'<script id="d">const __D__={json_str};</script>'
+
+    # Use lambda so regex does NOT process backslashes in replacement string
     output, n = re.subn(
         r'<script id="d">const __D__=.*?;</script>',
-        new_tag, template, count=1, flags=re.DOTALL
+        lambda m: new_tag,
+        template, count=1, flags=re.DOTALL
     )
     if n == 0:
         print('ERROR: injection point not found in template.html'); sys.exit(1)
 
     with open('index.html', 'w', encoding='utf-8') as f:
         f.write(output)
-
     print(f'✅ Built index.html ({len(output):,} chars)')
     print('🎉 Done!')
 
