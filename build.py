@@ -103,15 +103,12 @@ def page_to_row(page):
     props = page.get('properties', {})
     def p(name): return extract(props.get(name))
 
-    # Sprint: relation → fetch title → clean URL artifacts
     sprint = re.sub(r'\s*\(https?://[^)]+\)', '', p('Sprint')).strip()
 
-    # Status: normalize Testing → In Review
     status = p('Overall status')
     if status.lower() == 'testing':
         status = 'In Review'
 
-    # Task name: try 'Task name' first, fallback to title-type property
     task_name = p('Task name')
     if not task_name:
         for prop in props.values():
@@ -141,17 +138,16 @@ def build():
     print(f'✅ {len(pages)} pages fetched')
 
     rows = [page_to_row(p) for p in pages]
-    rows = [r for r in rows if r['Task name']]   # drop empty rows
+    rows = [r for r in rows if r['Task name']]
     print(f'✅ {len(rows)} valid rows')
 
-    json_str = json.dumps(rows, ensure_ascii=False, separators=(',', ':'))
+    # ensure_ascii=True: escape all non-ASCII as \uXXXX so JSON is safe inside <script> tags
+    json_str = json.dumps(rows, ensure_ascii=True, separators=(',', ':'))
     print(f'✅ JSON: {len(json_str):,} chars')
 
-    # Read template
     with open('template.html', 'r', encoding='utf-8') as f:
         template = f.read()
 
-    # Inject data into placeholder
     new_tag = f'<script id="d">const __D__={json_str};</script>'
     output, n = re.subn(
         r'<script id="d">const __D__=.*?;</script>',
